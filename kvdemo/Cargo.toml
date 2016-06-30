@@ -1,0 +1,8 @@
+[package]
+name = "kvdemo"
+version = "0.1.0"
+authors = ["Kyle Isom <coder@kyleisom.net>"]
+
+[dependencies]
+getopts = "0.2.14"
+hyper = "0.9.9"

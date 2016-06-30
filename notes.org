@@ -16,7 +16,6 @@
 	+ "To make an apple pie you must first invent the universe"
           and then 14 billion years later you have an apple pie
 	+ I'm hungry now, and the universe exists
-
   + Wanted to learn rust, but somewhat burned out on computers.
   + I have a specific set of goals:
     + Either do something novel (i.e. put thought into what I'm making)
@@ -37,5 +36,77 @@
         build a simple version of.
 	+ In fact, the kvdemo.go example was written in about an hour
           and a half.
-
       + A half-hearted spec:
+	+ The store is persisted on disk in a single file.
+	+ Key/value pairs are added to the store by POSTing to /<key>
+	  with a JSON dictionary; the value goes under the "value" key.
+	+ Values are returned by GETting /<key>.
+	+ Metrics (which double as a health check) are obtained by
+          GETting the index path.
+
+
+* First steps
+
+** Setting up Rust
+  
+   + Use rustup: https://www.rustup.rs/
+   + Try to use stable where possible.
+
+** Initialising the project
+
+   + =$ cargo new --bin --vcs git --color never kvdemo=
+   + Adding new packages to project:
+
+#+BEGIN_EXAMPLE
+$ echo 'getopts = "0.2.14"' >> Cargo.toml
+#+END_EXAMPLE
+
+   + The dependencies for this project so far:
+     + getopts for CLI argument parsing
+     + hyper for the HTTP server
+     + rustc_serialize::json for JSON serialisation
+
+   + Cargo.toml
+#+BEGIN_EXAMPLE
+[package]
+name = "kvdemo"
+version = "0.1.0"
+authors = ["Kyle Isom <coder@kyleisom.net>"]
+
+[dependencies]
+getopts = "0.2.14"
+hyper = "0.9.9"
+#+END_EXAMPLE
+
+* Adding command line options
+
+  + src/main.rs:
+
+#+BEGIN_EXAMPLE
+extern crate getopts;
+use getopts::Options;
+use std::env;
+
+fn main() {
+    let args: Vec<String> = env::args().collect();
+    let mut opts = Options::new();
+    opts.optopt("a", "", "Address server should listen on.", "ADDRESS");
+    opts.optflag("h", "help", "Print a short usage message.");
+    opts.optopt("f", "", "Path to disk store.", "FILE");
+
+    let matches = match opts.parse(&args[1..]) {
+        Ok(m) => { m }
+        Err(f) => { panic!(f.to_string()) }
+    };
+
+    if matches.opt_present("h") {
+        let brief = format!("Usage: {} FILE [options]", args[0]);        
+        print!("{}", opts.usage(&brief));
+        return;
+    }
+}
+#+END_EXAMPLE
+
+  + collect: =env::args()= returns an *iterator* over the CLI
+    arguments; =collect= turns this into an array.
+  + let mut opts: create a mutable variable options
