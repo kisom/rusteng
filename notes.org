@@ -1,0 +1,41 @@
+#+TITLE: Illustrated Guide to Building Software with Rust
+
+* Intro
+
+  + Learning a new language:
+    + Works best with an actual project to build
+    + Multiple concerns
+      + Language syntax / idioms
+      + How do I engineer a project
+	+ Package / dependency management
+	+ Initial project structure
+	+ Documentation
+	+ Testing
+      + How do I find existing functionality?
+	+ NIH is fun but nothing will get done
+	+ "To make an apple pie you must first invent the universe"
+          and then 14 billion years later you have an apple pie
+	+ I'm hungry now, and the universe exists
+
+  + Wanted to learn rust, but somewhat burned out on computers.
+  + I have a specific set of goals:
+    + Either do something novel (i.e. put thought into what I'm making)
+    + or learn a new language
+    + This is just due to the particulars of my current circumstances.
+  + Project idea:
+    + A key-value store with an HTTP UI
+      + Writes are done with JSON POST requests (to /key)
+      + Reads are done with url parameters (e.g. /key) and return JSON
+      + Systems programming topics:
+	+ Serialisation
+	+ Disk I/O (e.g. to persist the store)
+	+ Basic data structures (hash map of strings to structures)
+	+ Reading command line arguments
+	+ Basic HTTP server
+      + Why? this is the kind of thing that I can quickly put together
+        in Go; it's something I have a pretty good idea on how to
+        build a simple version of.
+	+ In fact, the kvdemo.go example was written in about an hour
+          and a half.
+
+      + A half-hearted spec:
