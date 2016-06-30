@@ -65,6 +65,7 @@ $ echo 'getopts = "0.2.14"' >> Cargo.toml
      + getopts for CLI argument parsing
      + hyper for the HTTP server
      + rustc_serialize::json for JSON serialisation
+     + time for Unix timestamps
 
    + Cargo.toml
 #+BEGIN_EXAMPLE
@@ -104,6 +105,24 @@ fn main() {
         print!("{}", opts.usage(&brief));
         return;
     }
+
+    let mut addr: String  = "localhost:8000".to_string();
+    if matches.opt_present("a") {
+        match matches.opt_str("a") {
+            Some(a) => { addr = a; }
+            None    => { panic!("address argument present but unavailable."); }
+        };
+    }
+
+    let mut store_file: String = "store.json".to_string();
+    if matches.opt_present("f") {
+        match matches.opt_str("f") {
+            Some(f) => { store_file = f; }
+            None    => { panic!("store file argument present but unavailable."); }
+        };
+    }
+
+    println!("listening on {}", addr);
 }
 #+END_EXAMPLE
 
@@ -118,3 +137,29 @@ fn main() {
     + parse() returns a something like a Maybe Matches (Ok(m), Fail)
     + panic! throws an abort (! => macro)
   + string formatting and printing: format!/print!
+  + so getopt feels a bit clunky here with the let -> present -> match pattern
+    + define the variable to store the arg with a default
+    + if it was set in the args, then the value needs to be extracted
+    + opt_str returns the argument as an Option type (Rust's version of Maybe)
+      + Just x  => Some(x)
+      + Nothing => None
+    + Given the call to present, any None value is a panicable result.
+    + String literals: use a separate type (`&'static str`), so needs
+      to be coerced into a String.
+      + String: heap strings, useful for mutable string types
+      + str: immutable sequence of bytes
+      + Go equivalent: String is string, str is []byte
+	+ but in Go, strings can't be modified (e.g. s[1] = 'x' is
+          invalid) while []bytes can
+
+
+* Creating the data store
+
+  + hash map of keys to values
+  + values have additional metadata: timestamp, version
+  + store has additional data: last update, last write to disk, disk errors
+
+  + defining structures
+
+  + getting timestamps
+

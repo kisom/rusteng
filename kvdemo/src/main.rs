@@ -1,6 +1,18 @@
 extern crate getopts;
+extern crate time;
+
 use getopts::Options;
 use std::env;
+
+fn timestamp() -> i64 {
+    return time::get_time().sec;
+}
+
+struct Value {
+    timestamp: i64,
+    version:   u64,
+    value:     String
+}
 
 fn main() {
     let args: Vec<_> = env::args().collect();
@@ -20,7 +32,7 @@ fn main() {
         return;
     }
 
-    let mut addr = "localhost:8000";
+    let mut addr: String  = "localhost:8000".to_string();
     if matches.opt_present("a") {
         match matches.opt_str("a") {
             Some(a) => { addr = a; }
@@ -28,11 +40,14 @@ fn main() {
         };
     }
 
-    let mut store_file = "store.json";
+    let mut store_file: String = "store.json".to_string();
     if matches.opt_present("f") {
         match matches.opt_str("f") {
             Some(f) => { store_file = f; }
             None    => { panic!("store file argument present but unavailable."); }
         };
     }
+
+    println!("started at {}", timestamp());
+    println!("listening on {}", addr);    
 }
