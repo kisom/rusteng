@@ -2,19 +2,75 @@ extern crate getopts;
 extern crate time;
 
 use getopts::Options;
+use std::collections::HashMap;
 use std::env;
 
 fn timestamp() -> i64 {
     return time::get_time().sec;
 }
 
+// A Value contains some string stored in the key/value store with
+// associated metadata.
+#[derive(Debug)]
 struct Value {
     timestamp: i64,
     version:   u64,
     value:     String
 }
 
+// A Metrics structure contains information about the key/value store.
+#[derive(Debug)]
+struct Metrics {
+    last_update: i64,
+    last_write:  i64,
+    size:        u64,
+    write_error: String
+}
+
+// A Store contains key/value pairs along with metadata about the
+// store.
+#[derive(Debug)]
+struct Store {
+    // The path to the disk file for the store.
+    path: String,
+
+    metrics: Metrics,
+    values: HashMap<String, Value>
+}
+
+impl Store {
+    fn add(&self, key: String, vs: String) -> bool {
+        let mut v: Value;
+        
+        // Empty strings aren't valid in this store.
+        if vs.is_empty() {
+            return false;
+        }
+
+        match self.values.get(&(key.clone())) {
+            Some(value) => {
+                if value.value == vs {
+                    return false;
+                }
+                v = *value;
+            }
+            _           => {}
+        }
+
+        v.timestamp = timestamp();
+        v.version += 1;
+        v.value = vs;
+
+        self.values.insert(key, v);
+        return true;
+    }
+}
+
 fn main() {
+    let mut store: Store;
+    store.values = HashMap::new();
+    store.path = "store.json".to_string();
+    
     let args: Vec<_> = env::args().collect();
     let mut opts = Options::new();
     opts.optopt("a", "", "Address server should listen on.", "ADDRESS");
@@ -40,14 +96,13 @@ fn main() {
         };
     }
 
-    let mut store_file: String = "store.json".to_string();
     if matches.opt_present("f") {
         match matches.opt_str("f") {
-            Some(f) => { store_file = f; }
+            Some(f) => { store.path = f; }
             None    => { panic!("store file argument present but unavailable."); }
         };
     }
 
     println!("started at {}", timestamp());
-    println!("listening on {}", addr);    
+    println!("listening on {}", addr);
 }
