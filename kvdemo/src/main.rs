@@ -39,7 +39,7 @@ struct Store {
 }
 
 impl Store {
-    fn add(&self, key: String, vs: String) -> bool {
+    fn add(&mut self, key: String, vs: String) -> bool {
         let mut v: Value;
         
         // Empty strings aren't valid in this store.
@@ -63,6 +63,13 @@ impl Store {
 
         self.values.insert(key, v);
         return true;
+    }
+
+    fn get(&self, key: String) -> Option<Value> {
+        match self.values.get(&(key.clone())) {
+            Some(v) => { return Some(*v); }
+            None    => { return None; }
+        };
     }
 }
 
@@ -103,6 +110,10 @@ fn main() {
         };
     }
 
+    if !store.add("test key".to_string(), "test value".to_string()) {
+        panic!("at the disco");
+    }
+    
     println!("started at {}", timestamp());
     println!("listening on {}", addr);
 }
