@@ -49,9 +49,11 @@
 //!    panic!("The 'something' value should have already been removed.");
 //! }
 //! ```
+extern crate rustc_serialize;
 extern crate time;
 
 use std::collections::HashMap;
+use rustc_serialize::json;
 
 fn timestamp() -> i64 {
     return time::get_time().sec;
@@ -59,7 +61,7 @@ fn timestamp() -> i64 {
 
 /// A Value contains some string stored in the key/value store with
 // associated metadata.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, RustcDecodable, RustcEncodable)]
 pub struct Value {
     timestamp: i64,
     version: u64,
@@ -87,7 +89,7 @@ impl Value {
 }
 
 /// A Metrics structure contains information about the key/value store.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, RustcDecodable, RustcEncodable)]
 pub struct Metrics {
     /// last_update stores the timestamp for the last time the store
     /// was updated; a call to `Store::delete` or `Store::add` will trigger this.
@@ -120,7 +122,7 @@ impl Metrics {
 
 /// A Store contains key/value pairs along with metadata about the
 /// store.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, RustcDecodable, RustcEncodable)]
 pub struct Store {
     /// path contains the disk path for the store.
     pub path: String,
@@ -208,6 +210,18 @@ impl Store {
     /// store.
     pub fn last_updated(self) -> i64 {
         return self.metrics.last_update.clone();
+    }
+
+    /// serialize encodes the store to JSON.
+    pub fn serialize(&self) -> String {
+        let encoded = json::encode(self).unwrap();
+        return encoded.to_string();
+    }
+
+    /// parse takes a JSON-encoded store in the string `encoded` and
+    /// returns a Store.
+    pub fn parse(encoded : String) -> Store {
+        return json::decode(&encoded).unwrap();
     }
 }
 
@@ -347,5 +361,27 @@ mod tests {
                 }
             }
         };
+    }
+
+    #[test]
+    fn store_encode() {
+       let mut store = ::Store::new();
+        store.add("a".to_string(), "b".to_string());
+        store.add("c".to_string(), "d".to_string());
+
+        let mut encoded = store.serialize();
+        println!("{}", encoded);
+        let decoded = ::Store::parse(encoded);
+        if store.metrics != decoded.metrics {
+            panic!("decode(encode(store)) didn't result in the same store.");
+        }
+
+        store.add("e".to_string(), "f".to_string());
+        encoded = store.serialize();
+        println!("{}", encoded);        
+        if store.metrics == decoded.metrics {
+            panic!("decode(encode(store)) didn't result in the same store.");
+        }
+        
     }
 }
