@@ -54,7 +54,7 @@
 
 ** Initialising the project
 
-   + =$ cargo new --bin --vcs git --color never kvdemo=
+   + =$ cargo new --bin --vcs git --color never skvs=
    + Adding new packages to project:
 
 #+BEGIN_EXAMPLE
