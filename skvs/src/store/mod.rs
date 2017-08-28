@@ -5,6 +5,7 @@ pub mod entry;
 
 use self::entry::Entry;
 use std::collections::HashMap;
+use std::collections::hash_map::Entry::{Occupied, Vacant};
 use std::string::ToString;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -79,10 +80,14 @@ pub fn new(store_path: String) -> Store {
 }
 
 impl Store {
+    /// len returns the number of entries in the key-value store.
     fn len(&self) -> usize {
         self.values.len()
     }
 
+    /// insert writes a new entry. The expectation is that the entry doesn't
+    /// exist; if it does, `AlreadyExists` is returned. Otherwise, the entry
+    /// is inserted and `Inserted` is returned.
     fn insert(&mut self, k: String, v: String) -> WriteResult {
         if self.values.contains_key(&k) {
             AlreadyExists
@@ -92,15 +97,55 @@ impl Store {
         }                
     }
 
+    /// update changes the value for `k` to `v`. If there was no
+    /// existing entry for `k`, `Inserted` is returned. Otherwise,
+    /// `Updated` is returned. Note that if `v` is the same as the
+    /// existing value, the entry will not be changed but `Updated` is
+    /// still returned.
     fn update(&mut self, k: String, v: String) -> WriteResult {
-        panic!("not implemented yet");
-        AlreadyExists
+        // TODO(kyle): return AlreadyExists if v == old.value.
+        //
+        // pretty sure this function is an abomination.
+        let wr: WriteResult;
+        let old: Option<Entry>;
+        let mut tmp_values = self.values.clone();
+
+        match tmp_values.entry(k.clone()) {
+            Occupied(e) => {
+                old = Some(e.get().clone());
+                wr = Updated;
+                
+            },
+            Vacant(_)   => {
+                old = None;
+                wr = Inserted;
+            }
+        }
+
+        match old {
+            Some(ref ent) => {
+                self.values.insert(k, Entry::update_from_string(ent, v));
+            },
+            None          => {
+                self.values.insert(k, Entry::from_string(v));
+            }
+        }
+
+        return wr;
+    }
+
+    /// get returns Some(value) if the key is present in the SKVS.
+    fn get(&mut self, k: String) -> Option<String> {
+        match self.values.entry(k.clone()) {
+            Occupied(ent) => return Some(ent.get().value.clone()),
+            Vacant(_)     => return None,
+        }
     }
 }
 
 
 #[test]
-fn test_new() {
+fn test_store() {
     let mut kvs = new("".to_string());
     assert_eq!(kvs.len(), 0);
 
@@ -121,6 +166,14 @@ fn test_new() {
 
     wr = kvs.update("D800".to_string(), "Nikon".to_string());
     assert_eq!(wr, Updated);
-    assert_eq!(kvs.len(), 2);    
-}
+    assert_eq!(kvs.len(), 2);
 
+    let mut v = kvs.get("D800".to_string());
+    assert_eq!(v.expect("missing entry"), "Nikon".to_string());
+
+    v = kvs.get("X-Pro2".to_string());
+    assert_eq!(v.expect("missing entry"), "Fujifilm".to_string());
+
+    v = kvs.get("EOS 5D Mark II".to_string());
+    assert!(v.is_none());
+}

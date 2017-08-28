@@ -29,7 +29,8 @@ use std::time::Duration;
 /// assert_eq!(new.version, old.version + 1);
 /// assert!(new.time >= old.time);
 /// ```
-///  
+///
+#[derive(Clone, Debug)]
 pub struct Entry {
     /// time stores the timestamp from the last write on the entry,
     /// whether that write is creation (version = 1) or modification
