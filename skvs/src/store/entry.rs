@@ -2,7 +2,9 @@
 //! store's hash map.
 extern crate time;
 
+#[allow(unused_imports)]
 use std::thread;
+#[allow(unused_imports)]
 use std::time::Duration;
 
 
@@ -30,7 +32,7 @@ use std::time::Duration;
 /// assert!(new.time >= old.time);
 /// ```
 ///
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Entry {
     /// time stores the timestamp from the last write on the entry,
     /// whether that write is creation (version = 1) or modification

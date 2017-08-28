@@ -3,6 +3,8 @@
 //! key to an `Entry`.
 pub mod entry;
 
+extern crate serde;
+extern crate serde_json;
 extern crate time;
 
 use self::entry::Entry;
@@ -41,8 +43,8 @@ impl ToString for WriteResult {
     }
 }
 
-#[derive(Clone, Copy, Debug)]
 /// metrics contains information about the SKVS.
+#[derive(Clone, Copy, Debug, Serialize, Deserialize)]
 pub struct Metrics {
     /// last_update stores the timestamp for the last time the store
     /// was updated; a call to insert, update, or delete will update
@@ -65,6 +67,7 @@ impl Metrics {
 }
 
 /// A `Store` is a simple key value store that persists to disk.
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Store {
     /// path is the location on disk of the persisted SKVS.
     pub path: String,
@@ -83,6 +86,21 @@ pub fn new(store_path: String) -> Store {
 }
 
 impl Store {
+    /// `dump` serialises the store to JSON.
+    pub fn dump(&self) -> serde_json::Result<String> {
+        serde_json::to_string(self)
+    }
+
+    /// `restore` parses the store from JSON.
+    pub fn restore(data: &str) -> serde_json::Result<Store> {
+        serde_json::from_str(data)
+    }
+    
+    /// `update_metrics` makes sure the metrics field is up to
+    /// date. if `write` is true, the `last_update` field is set to
+    /// the current time stamp and the `size` field is set to the
+    /// current HashMap size. If `persist` is true, the `last_write`
+    /// field is updated.
     fn update_metrics(&mut self, write: bool, persist: bool) {
         let mut metrics = self.metrics;
 
@@ -154,7 +172,7 @@ impl Store {
         return wr;
     }
 
-    /// get returns Some(value) if the key is present in the SKVS.
+    /// `get` returns `Some(value)` if the key is present in the SKVS.
     pub fn get(&mut self, k: String) -> Option<String> {
         match self.values.entry(k.clone()) {
             Occupied(ent) => return Some(ent.get().value.clone()),
@@ -162,7 +180,7 @@ impl Store {
         }
     }
 
-    /// delete removes the key form the database.
+    /// `delete` removes the key from the database.
     pub fn delete(&mut self, k: String) -> WriteResult {
         if self.values.contains_key(&k) {
             self.values.remove(&k);
@@ -259,4 +277,11 @@ fn test_store() {
     assert!(kvs.metrics.last_update >= lastup);
     assert_eq!(kvs.metrics.size, kvs.len());
     assert_eq!(kvs.metrics.size, 2);
+
+    let dumped = kvs.dump().unwrap();
+    assert_ne!(dumped.len(), 0);
+
+    let kvs2 = Store::restore(&dumped).unwrap();
+    assert_eq!(kvs2.len(), kvs.len());    
 }
+

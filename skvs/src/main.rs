@@ -1,5 +1,8 @@
+#[macro_use]
+extern crate serde_derive;
+
 pub mod store;
 
 fn main() {
-    println!("Hello, world!");
+    panic!("not ready yet")
 }
