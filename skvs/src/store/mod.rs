@@ -3,6 +3,8 @@
 //! key to an `Entry`.
 pub mod entry;
 
+extern crate time;
+
 use self::entry::Entry;
 use std::collections::HashMap;
 use std::collections::hash_map::Entry::{Occupied, Vacant};
@@ -18,8 +20,12 @@ pub enum WriteResult {
     /// didn't already exist.
     Inserted,
     /// Updated is returned when updating the entry for an
-    /// already-existing key.
+    /// already-existing key; this occurs both with `update`
+    /// and `delete`.
     Updated,
+    /// DoesNotExist is returned when deleting a key that doesn't
+    /// exist.
+    DoesNotExist,
 }
 
 use self::WriteResult::*;
@@ -29,16 +35,18 @@ impl ToString for WriteResult {
         match *self {
             AlreadyExists => return "key already exists".to_string(),
             Inserted      => return "new entry inserted".to_string(),
-            Updated       => return "updated existing entry".to_string(),
+            Updated       => return "entry was updated".to_string(),
+            DoesNotExist  => return "key doesn't exist".to_string(),
         }
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Copy, Debug)]
 /// metrics contains information about the SKVS.
 pub struct Metrics {
     /// last_update stores the timestamp for the last time the store
-    /// was updated; a call to `Store::delete` or `Store::add` will trigger this.
+    /// was updated; a call to insert, update, or delete will update
+    /// this field.
     pub last_update: i64,
 
     /// last_write stores the timestamp for the last time the store
@@ -47,17 +55,12 @@ pub struct Metrics {
 
     /// size stores the current number of keys in the store.
     pub size: usize,
-
-    /// write_error contains a string error message indicating why the
-    /// last write failed. If the last write was successful, this
-    /// field will be empty.
-    pub write_error: String,    
 }
 
 impl Metrics {
     /// new returns initialises an empty Metrics structure.
     pub fn new() -> Metrics {
-        Metrics { last_update: 0, last_write: 0, size: 0, write_error: "".to_string() }
+        Metrics { last_update: 0, last_write: 0, size: 0 }
     }
 }
 
@@ -80,21 +83,37 @@ pub fn new(store_path: String) -> Store {
 }
 
 impl Store {
+    fn update_metrics(&mut self, write: bool, persist: bool) {
+        let mut metrics = self.metrics;
+
+        if write {
+            metrics.last_update = time::get_time().sec;
+            metrics.size = self.len();
+        }
+
+        if persist {
+            metrics.last_write = time::get_time().sec;
+        }
+
+        self.metrics = metrics;
+    }
+
     /// len returns the number of entries in the key-value store.
-    fn len(&self) -> usize {
+    pub fn len(&self) -> usize {
         self.values.len()
     }
 
     /// insert writes a new entry. The expectation is that the entry doesn't
     /// exist; if it does, `AlreadyExists` is returned. Otherwise, the entry
     /// is inserted and `Inserted` is returned.
-    fn insert(&mut self, k: String, v: String) -> WriteResult {
+    pub fn insert(&mut self, k: String, v: String) -> WriteResult {
         if self.values.contains_key(&k) {
             AlreadyExists
         } else {
             self.values.insert(k, Entry::from_string(v));
+            self.update_metrics(true, false);
             Inserted
-        }                
+        }
     }
 
     /// update changes the value for `k` to `v`. If there was no
@@ -102,7 +121,7 @@ impl Store {
     /// `Updated` is returned. Note that if `v` is the same as the
     /// existing value, the entry will not be changed but `Updated` is
     /// still returned.
-    fn update(&mut self, k: String, v: String) -> WriteResult {
+    pub fn update(&mut self, k: String, v: String) -> WriteResult {
         // TODO(kyle): return AlreadyExists if v == old.value.
         //
         // pretty sure this function is an abomination.
@@ -114,7 +133,7 @@ impl Store {
             Occupied(e) => {
                 old = Some(e.get().clone());
                 wr = Updated;
-                
+
             },
             Vacant(_)   => {
                 old = None;
@@ -131,14 +150,27 @@ impl Store {
             }
         }
 
+        self.update_metrics(true, false);
         return wr;
     }
 
     /// get returns Some(value) if the key is present in the SKVS.
-    fn get(&mut self, k: String) -> Option<String> {
+    pub fn get(&mut self, k: String) -> Option<String> {
         match self.values.entry(k.clone()) {
             Occupied(ent) => return Some(ent.get().value.clone()),
             Vacant(_)     => return None,
+        }
+    }
+
+    /// delete removes the key form the database.
+    pub fn delete(&mut self, k: String) -> WriteResult {
+        if self.values.contains_key(&k) {
+            self.values.remove(&k);
+            self.update_metrics(true, false);
+            Updated
+        }
+        else {
+            DoesNotExist
         }
     }
 }
@@ -148,32 +180,83 @@ impl Store {
 fn test_store() {
     let mut kvs = new("".to_string());
     assert_eq!(kvs.len(), 0);
+    assert_eq!(kvs.metrics.last_update, 0);
+    assert_eq!(kvs.metrics.size, kvs.len());
 
     let mut wr: WriteResult;
+    let mut lastup: i64;
     wr = kvs.insert("X-Pro2".to_string(), "Fujifilm".to_string());
     assert_eq!(wr, Inserted);
     assert_eq!(kvs.len(), 1);
+    assert_ne!(kvs.metrics.last_update, 0);
+    assert_eq!(kvs.metrics.size, kvs.len());
+    lastup = kvs.metrics.last_update;
 
     // Make a mistake.
     wr = kvs.insert("D800".to_string(), "Canon".to_string());
     assert_eq!(wr, Inserted);
     assert_eq!(kvs.len(), 2);
+    assert_ne!(kvs.metrics.last_update, 0);
+    assert!(kvs.metrics.last_update >= lastup);
+    assert_eq!(kvs.metrics.size, kvs.len());
+    lastup = kvs.metrics.last_update;
 
     // Fix it.
     wr = kvs.insert("D800".to_string(), "Nikon".to_string());
     assert_eq!(wr, AlreadyExists);
     assert_eq!(kvs.len(), 2);
+    assert_ne!(kvs.metrics.last_update, 0);
+    assert!(kvs.metrics.last_update >= lastup);
+    assert_eq!(kvs.metrics.size, kvs.len());
+    lastup = kvs.metrics.last_update;
 
     wr = kvs.update("D800".to_string(), "Nikon".to_string());
     assert_eq!(wr, Updated);
     assert_eq!(kvs.len(), 2);
+    assert_ne!(kvs.metrics.last_update, 0);
+    assert!(kvs.metrics.last_update >= lastup);
+    assert_eq!(kvs.metrics.size, kvs.len());
+    lastup = kvs.metrics.last_update;
 
     let mut v = kvs.get("D800".to_string());
     assert_eq!(v.expect("missing entry"), "Nikon".to_string());
 
     v = kvs.get("X-Pro2".to_string());
     assert_eq!(v.expect("missing entry"), "Fujifilm".to_string());
+    assert_ne!(kvs.metrics.last_update, 0);
+    assert!(kvs.metrics.last_update >= lastup);
+    assert_eq!(kvs.metrics.size, kvs.len());
+    lastup = kvs.metrics.last_update;
 
     v = kvs.get("EOS 5D Mark II".to_string());
     assert!(v.is_none());
+    assert_ne!(kvs.metrics.last_update, 0);
+    assert!(kvs.metrics.last_update >= lastup);
+    assert_eq!(kvs.metrics.size, kvs.len());
+    lastup = kvs.metrics.last_update;
+
+    wr = kvs.insert("EOS 5D Mark II".to_string(), "Canon".to_string());
+    assert_eq!(wr, Inserted);
+    assert_ne!(kvs.metrics.last_update, 0);
+    assert!(kvs.metrics.last_update >= lastup);
+    assert_eq!(kvs.metrics.size, kvs.len());
+    assert_eq!(kvs.metrics.size, 3);
+    lastup = kvs.metrics.last_update;
+    
+    // I'd probably not buy a Canon, so...
+    wr = kvs.delete("EOS 5D Mark II".to_string());
+    assert_eq!(wr, Updated);
+    assert_ne!(kvs.metrics.last_update, 0);
+    assert!(kvs.metrics.last_update >= lastup);
+    assert_eq!(kvs.metrics.size, kvs.len());
+    assert_eq!(kvs.metrics.size, 2);
+    lastup = kvs.metrics.last_update;
+
+    // just to be certain, NIFO
+    wr = kvs.delete("EOS 5D Mark II".to_string());
+    assert_eq!(wr, DoesNotExist);
+    assert_ne!(kvs.metrics.last_update, 0);
+    assert!(kvs.metrics.last_update >= lastup);
+    assert_eq!(kvs.metrics.size, kvs.len());
+    assert_eq!(kvs.metrics.size, 2);
 }
