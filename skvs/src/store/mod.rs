@@ -10,6 +10,9 @@ extern crate time;
 use self::entry::Entry;
 use std::collections::HashMap;
 use std::collections::hash_map::Entry::{Occupied, Vacant};
+use std::error::Error;
+use std::fs::File;
+use std::io;
 use std::string::ToString;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -86,14 +89,26 @@ pub fn new(store_path: String) -> Store {
 }
 
 impl Store {
-    /// `dump` serialises the store to JSON.
-    pub fn dump(&self) -> serde_json::Result<String> {
-        serde_json::to_string(self)
+    pub fn load(path: String) -> Result<Store, io::Error> {
+        let file = File::open(path.clone())?;
+        match serde_json::from_reader(file) {
+            Ok(store) => Ok(store),
+            Err(err)  => Err(io::Error::new(io::ErrorKind::Other, err.description())),
+        }
     }
 
-    /// `restore` parses the store from JSON.
-    pub fn restore(data: &str) -> serde_json::Result<Store> {
-        serde_json::from_str(data)
+    /// `flush` writes the store to disk.
+    pub fn flush(&mut self) -> Result<(), io::Error> {
+        if self.path == "" {
+            return Ok(());
+        }
+        self.update_metrics(false, true);
+        
+        let file = File::create(self.path.clone())?;
+        match serde_json::to_writer(file, self) {
+            Ok(_)    => Ok(()),
+            Err(err) => Err(io::Error::new(io::ErrorKind::Other, err.description())),
+        }
     }
     
     /// `update_metrics` makes sure the metrics field is up to
@@ -196,7 +211,7 @@ impl Store {
 
 #[test]
 fn test_store() {
-    let mut kvs = new("".to_string());
+    let mut kvs = new("/tmp/kvs.json".to_string());
     assert_eq!(kvs.len(), 0);
     assert_eq!(kvs.metrics.last_update, 0);
     assert_eq!(kvs.metrics.size, kvs.len());
@@ -278,10 +293,8 @@ fn test_store() {
     assert_eq!(kvs.metrics.size, kvs.len());
     assert_eq!(kvs.metrics.size, 2);
 
-    let dumped = kvs.dump().unwrap();
-    assert_ne!(dumped.len(), 0);
-
-    let kvs2 = Store::restore(&dumped).unwrap();
-    assert_eq!(kvs2.len(), kvs.len());    
+    kvs.flush().unwrap();
+    let kvs2 = Store::load(kvs.path.clone()).unwrap();
+    assert_eq!(kvs.metrics.last_write, kvs2.metrics.last_write);
 }
 
